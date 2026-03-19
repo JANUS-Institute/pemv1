@@ -22,8 +22,15 @@ Create a virtual environment
 ```
 uv venv
 ```
-Run the script (here using only ion velocity data from Macdonald-Tenenbaum et al.).
-This will install all of the needed dependencies before running.
+Install julia (if needed) and HallThruster.jl.
+This will create a fresh julia environment called hallthruster_{VERSION} where {VERSION} is the version of HallThruster.jl specified in the config file.
+By default, this is v0.18.7, which was the version used in the paper.
+```
+uv run scripts/install_hallthruster.py --hallthruster-version={VERSION}
+```
+Note that uv will automatically install the needed dependencies.
+You may need to restart your shell after running the above to ensure the correct environment variables are set.
+Next, you can run the mcmc script (here using only ion velocity data from Macdonald-Tenenbaum et al.).
 ```
 uv run scripts/run_mcmc.py --datasets ../pem_data/data/SPT-100/tenenbaum/data.py --output-dir=output --max-samples=10
 ```

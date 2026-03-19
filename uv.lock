@@ -167,7 +167,7 @@ wheels = [
 [[package]]
 name = "hallmd"
 version = "0.3.0"
-source = { git = "https://github.com/JANUS-Institute/HallThrusterPEM.git#4f9762f4ca77620f94bca1cba68cbf10120a5a64" }
+source = { git = "https://github.com/JANUS-Institute/HallThrusterPEM.git#67d39e120b008291c09a5cc9e0c4d567b13d8f2e" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },

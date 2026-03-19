@@ -5,15 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "hallmd",
+    "hallmd @ git+https://github.com/JANUS-Institute/HallThrusterPEM.git",
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "packaging>=26.0",
-    "pem-core",
+    "pem-core @  git+https://github.com/JANUS-Institute/pem_core.git",
     "scipy>=1.17.1",
     "xarray>=2026.2.0",
 ]
-
-[tool.uv.sources]
-pem-core = { git = "https://github.com/JANUS-Institute/pem_core.git" }
-hallmd = { git = "https://github.com/JANUS-Institute/HallThrusterPEM.git" }

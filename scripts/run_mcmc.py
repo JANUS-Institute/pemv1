@@ -8,8 +8,9 @@ Additionally, each sample, its log-pdf, and whether it was accepted are written 
 
 For usage details and a full list of options , run 'pdm run scripts/run_mcmc.py --help'
 """  # noqa: E501
+
 import argparse
-from argparse import Namespace
+from argparse import ArgumentError, Namespace
 import copy
 import json
 import os
@@ -24,14 +25,23 @@ import numpy as np
 
 import amisc.distribution as distributions
 
-from pem_core import PEM, ArrayLike, PathLike
+from pem_core import PEM
+from pem_core.types import ArrayLike, PathLike
 from pem_core.data import DataEntry, extract_data_arrays, interpolate_data_instance
-from pem_core.sampling import relative_gaussian_likelihood, LikelihoodType, DRAMSampler, PriorSampler, PreviousRunSampler
+from pem_core.sampling import (
+    relative_gaussian_likelihood,
+    LikelihoodType,
+    DRAMSampler,
+    PriorSampler,
+    PreviousRunSampler,
+)
 
 # Import data loading configuration from the Hall thruster PEM
 from hallmd.data import pem_to_xarray, load_ht_datasets
 
-parser = argparse.ArgumentParser(description="Run MCMC calibration for the Hall thruster PEM.")
+parser = argparse.ArgumentParser(
+    description="Run MCMC calibration for the Hall thruster PEM."
+)
 
 parser.add_argument(
     "config",
@@ -61,7 +71,7 @@ parser.add_argument(
     help="The maximum number of samples to generate using MCMC",
 )
 
-parser.add_argument(
+dataset_arg = parser.add_argument(
     "--datasets",
     type=str,
     nargs="+",
@@ -91,7 +101,12 @@ parser.add_argument(
     help="Standard deviation of the Gaussian noise in the likelihood calculation",
 )
 
-parser.add_argument("--output-dir", type=str, default=None, help="Directory into which output files are written")
+parser.add_argument(
+    "--output-dir",
+    type=str,
+    default=None,
+    help="Directory into which output files are written",
+)
 
 parser.add_argument(
     "--init-sample",
@@ -131,23 +146,25 @@ parser.add_argument(
 parser.add_argument(
     "--burn-fraction",
     type=float,
-    default = 0.5,
-    help="What percentage of samples from the previous run should be discarded as burn-in."
+    default=0.5,
+    help="What percentage of samples from the previous run should be discarded as burn-in.",
 )
 
 parser.add_argument(
     "--sample-aleatoric",
-    action='store_true',
+    action="store_true",
     help="Sample aleatoric varibles from distributions in config file instead of using fixed values.",
 )
 
-#%%
+
+# %%
 @dataclass
 class ExecutionOptions:
     """
     Container for various options needed to execute the PEM during MCMC, including model fidelity, parallel execution settings, and some random params.
     TODO: this could probably be bundled up a bit nicer.
     """
+
     executor: Type
     max_workers: int
     fidelity: str | tuple | dict = (0, 0)
@@ -155,12 +172,15 @@ class ExecutionOptions:
     sample_aleatoric: bool = False
     print_likelihood: bool = True
 
+
 def load_pem_and_opts(args: Namespace) -> tuple[PEM, ExecutionOptions]:
     """Load a PEM from an amisc config file and set up the execution options based on the command line args"""
     config = args.config
     pem = PEM.from_file(config, output_dir=args.output_dir)
     pem.set_logger(stdout=True)
-    assert pem.root_dir is not None, "PEM root directory must be set. This should have been done in PEM.from_file"
+    assert pem.root_dir is not None, (
+        "PEM root directory must be set. This should have been done in PEM.from_file"
+    )
 
     # Copy config file into output dir
     if Path(config).name not in os.listdir(pem.root_dir):
@@ -183,6 +203,7 @@ def load_pem_and_opts(args: Namespace) -> tuple[PEM, ExecutionOptions]:
     )
 
     return pem, opts
+
 
 def _sample_aleatoric(sample_dict, system):
     """Sample the aleatoric variables using normal distributions, rather than the uniform distributions that amisc uses for Relative."""
@@ -244,6 +265,7 @@ def _consolidate_outputs(path: Path):
     if thruster_path.is_dir():
         shutil.rmtree(thruster_path)
 
+
 def _run_model(
     params: dict[str, ArrayLike],
     pem: PEM,
@@ -279,19 +301,24 @@ def _run_model(
 
     # Check for errors
     if "errors" in amisc_outputs:
-        raise ChildProcessError(amisc_outputs["errors"][0]['error'])
+        raise ChildProcessError(amisc_outputs["errors"][0]["error"])
 
     # Get plume sweep radii
     if "Plume" in [c.name for c in pem.components]:
-        sweep_radii = pem['Plume'].model_kwargs['sweep_radius']
+        sweep_radii = pem["Plume"].model_kwargs["sweep_radius"]
     else:
         sweep_radii = np.array([1.0])
 
-    pem_output = pem_to_xarray(operating_conditions, cast(dict, amisc_outputs), sweep_radii, use_corrected_thrust=True)
+    pem_output = pem_to_xarray(
+        operating_conditions,
+        cast(dict, amisc_outputs),
+        sweep_radii,
+        use_corrected_thrust=True,
+    )
 
     if output_dir is not None:
         # Write PEM outputs to file
-        if pem_output is not None :
+        if pem_output is not None:
             with open(Path(output_dir) / "pem.pkl", "wb") as fd:
                 pickle.dump({"input": sample_dict, "output": pem_output}, fd)
 
@@ -299,6 +326,7 @@ def _run_model(
         _consolidate_outputs(Path(output_dir))
 
     return pem_output
+
 
 def _log_likelihood(
     data: list[DataEntry],
@@ -311,7 +339,10 @@ def _log_likelihood(
     The closure approach allows us to use a consistent function signature in the Sampler interface.
     The likelihood function has signature: likeliood(pem, params, output_dir) -> float
     """
-    def _likelihood_func(pem: PEM, params: dict[str, ArrayLike], output_dir: PathLike | None) -> float:
+
+    def _likelihood_func(
+        pem: PEM, params: dict[str, ArrayLike], output_dir: PathLike | None
+    ) -> float:
         opconds = [d.operating_condition for d in data]
         sim_results = _run_model(params, pem, opconds, base_params, output_dir, opts)
 
@@ -319,7 +350,10 @@ def _log_likelihood(
             return -np.inf
 
         # Interpolate sim results to data coordinates
-        sim_itp = [interpolate_data_instance(_sim.data, _data.data) for (_sim, _data) in zip(sim_results, data)]
+        sim_itp = [
+            interpolate_data_instance(_sim.data, _data.data)
+            for (_sim, _data) in zip(sim_results, data)
+        ]
 
         # Extract data per-field into 1-D vectors
         sim_arrays = extract_data_arrays(sim_itp)
@@ -330,7 +364,9 @@ def _log_likelihood(
         L = 0.0
         for field_name, (data_vec, _) in data_arrays.items():
             sim_vec, _ = sim_arrays[field_name]
-            distance, likelihood = relative_gaussian_likelihood(data_vec, sim_vec, opts.noise_std)        
+            distance, likelihood = relative_gaussian_likelihood(
+                data_vec, sim_vec, opts.noise_std
+            )
             component_stats[field_name] = (distance, likelihood)
             L += likelihood
 
@@ -338,7 +374,12 @@ def _log_likelihood(
         if opts.print_likelihood:
             name_len = max(len(n) for n in component_stats.keys()) + 1
             indent = "  "
-            header = indent + " Field" + (" " * (name_len - 5)) + "|  L2 norm   | Likelihood  "
+            header = (
+                indent
+                + " Field"
+                + (" " * (name_len - 5))
+                + "|  L2 norm   | Likelihood  "
+            )
             rule = "-" * len(header)
             print("\n" + rule)
             print(header)
@@ -351,12 +392,14 @@ def _log_likelihood(
 
     return _likelihood_func
 
+
 OPCOND_SHORT_NAMES = {
     "discharge voltage": "V_a",
     "anode mass flow rate": "mdot_a",
     "background pressure": "P_b",
     "magnetic field scale": "B_hat",
 }
+
 
 def main(args):
     # Load PEM from YAML file and determine nominal and calibration parameters
@@ -366,27 +409,30 @@ def main(args):
     calibration_vars = pem.get_inputs_by_category("calibration", sort="name")
 
     # Load data from files
+    if args.datasets is None:
+        raise ArgumentError(dataset_arg, "No datasets provided! Exiting.")
+
     data = load_ht_datasets(args.datasets)
     operating_conditions = [d.operating_condition for d in data]
 
-    print(f"Calibration variables:\n\t{", ".join([p.name for p in calibration_vars])}")
+    print(f"Calibration variables:\n\t{', '.join([p.name for p in calibration_vars])}")
     print(f"Number of operating conditions: {len(operating_conditions)}")
 
     # Load operating conditions into input dictionary
-    for (long_name, param) in OPCOND_SHORT_NAMES.items():
+    for long_name, param in OPCOND_SHORT_NAMES.items():
         if param not in pem.inputs():
             base_vars[param] = 1.0
         else:
             inputs_unnorm = np.array([cond[long_name] for cond in operating_conditions])
-            base_vars[param] = pem.inputs()[param].normalize(inputs_unnorm) # type: ignore
+            base_vars[param] = pem.inputs()[param].normalize(inputs_unnorm)  # type: ignore
 
     # Remove data where theta < 0 for ion current density
     JION_KEY = "ion current density"
     for d in data:
         if (jion := d.data.get(JION_KEY)) is not None:
-            jion.val = jion.val.sel(theta=slice(0, np.pi/2))
-            if (jion.err is not None):
-                jion.err = jion.err.sel(theta=slice(0, np.pi/2))
+            jion.val = jion.val.sel(theta=slice(0, np.pi / 2))
+            if jion.err is not None:
+                jion.err = jion.err.sel(theta=slice(0, np.pi / 2))
 
     # Set plume sweep radii based on data.
     # If there is no ion current density in the data, we just set the sweep radius to 1.0 (i.e. no sweeping).
@@ -394,31 +440,52 @@ def main(args):
     if "Plume" in component_names:
         sweep_radii = []
         for entry in data:
-            if JION_KEY in entry.data and (ji_coords := entry.data[JION_KEY].val.coords) is not None and "r" in ji_coords:
+            if (
+                JION_KEY in entry.data
+                and (ji_coords := entry.data[JION_KEY].val.coords) is not None
+                and "r" in ji_coords
+            ):
                 sweep_radii.extend(ji_coords["r"].values)
 
-        pem['Plume'].model_kwargs['sweep_radius'] = np.sort(np.unique(sweep_radii)) if sweep_radii else np.array([1.0])
+        pem["Plume"].model_kwargs["sweep_radius"] = (
+            np.sort(np.unique(sweep_radii)) if sweep_radii else np.array([1.0])
+        )
 
     # Set up output dir
-    output_dir = Path(pem.root_dir) / "mcmc" # type: ignore
+    output_dir = Path(pem.root_dir) / "mcmc"  # type: ignore
     os.makedirs(output_dir, exist_ok=True)
 
     # Set up sampler
     log_likelihood = _log_likelihood(data, base_vars, exec_opts)
-    sampler_args = dict(pem=pem, sample_vars=calibration_vars, base_vars=base_vars, log_likelihood=log_likelihood, output_dir=output_dir)
+    sampler_args = dict(
+        pem=pem,
+        sample_vars=calibration_vars,
+        base_vars=base_vars,
+        log_likelihood=log_likelihood,
+        output_dir=output_dir,
+    )
 
     match args.sampler:
         case "dram":
-            sampler = DRAMSampler(**sampler_args, init_sample_file=args.init_sample, init_cov_file=args.init_cov)
+            sampler = DRAMSampler(
+                **sampler_args,
+                init_sample_file=args.init_sample,
+                init_cov_file=args.init_cov,
+            )
         case "prior":
             sampler = PriorSampler(**sampler_args)
         case "prev-run":
-            sampler = PreviousRunSampler(args.prev, burn_fraction=args.burn_fraction, **sampler_args)
+            sampler = PreviousRunSampler(
+                args.prev, burn_fraction=args.burn_fraction, **sampler_args
+            )
         case _:
-            raise ValueError(f"Invalid sampler {args.sampler} specified. This should be unreachable.")
+            raise ValueError(
+                f"Invalid sampler {args.sampler} specified. This should be unreachable."
+            )
 
     # MCMC loop
     sampler.sample(args.max_samples)
+
 
 if __name__ == "__main__":
     args = parser.parse_args()

@@ -403,7 +403,7 @@ OPCOND_SHORT_NAMES = {
 
 def main(args):
     # Create output_dir if it doesn't already exist
-    if args.output_dir is None:
+    if args.output_dir is not None:
         os.makedirs(args.output_dir, exist_ok=True)
 
     # Load PEM from YAML file and determine nominal and calibration parameters

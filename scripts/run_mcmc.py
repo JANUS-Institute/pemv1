@@ -31,6 +31,18 @@ from pem_core.sampling import relative_gaussian_likelihood, LikelihoodType, DRAM
 # Import data loading configuration from the Hall thruster PEM
 from hallmd.data import pem_to_xarray, load_ht_datasets
 
+DEFAULT_DATASETS_BY_CONFIG = {
+    "pemv1_spt100": ["diamant2014", "macdonald2019"],
+}
+
+DATASET_ALIASES = {
+    "diamant2014": Path("data/SPT-100/diamant2014/data_aerospace.csv"),
+    "macdonald2019": Path("data/SPT-100/tenenbaum2019/data.csv"),
+    "tenenbaum2019": Path("data/SPT-100/tenenbaum2019/data.csv"),
+    "sankovic1993": Path("data/SPT-100/sankovic1993/data.csv"),
+    "express2001": Path("data/SPT-100/express2001/data.csv"),
+}
+
 parser = argparse.ArgumentParser(description="Run MCMC calibration for the Hall thruster PEM.")
 
 parser.add_argument(
@@ -66,7 +78,7 @@ parser.add_argument(
     type=str,
     nargs="+",
     default=None,
-    help="A list of file paths pointing to datasets",
+    help="Dataset names or CSV file paths. If omitted, known configs use project defaults.",
 )
 
 parser.add_argument(
@@ -154,6 +166,57 @@ class ExecutionOptions:
     noise_std: float = 0.05
     sample_aleatoric: bool = False
     print_likelihood: bool = True
+
+
+def _find_pem_data_dir(config: PathLike) -> Path | None:
+    """Find the local `pem_data` checkout relative to the project/config layout."""
+    config_path = Path(config).resolve()
+    candidates = [
+        config_path.parents[1] / "pem_data",
+        Path.cwd().resolve().parent / "pem_data",
+        Path.cwd().resolve() / "pem_data",
+    ]
+
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+
+    return None
+
+
+def _resolve_datasets(config: PathLike, datasets: list[str] | None) -> list[str]:
+    """Resolve dataset names or paths into concrete CSV file paths."""
+    config_path = Path(config).resolve()
+    specs = datasets if datasets is not None else DEFAULT_DATASETS_BY_CONFIG.get(config_path.stem)
+    if specs is None:
+        raise ValueError(
+            "No datasets were provided and no defaults are defined for this config. "
+            "Pass --datasets with dataset names or CSV file paths."
+        )
+
+    pem_data_dir = _find_pem_data_dir(config)
+    resolved = []
+
+    for spec in specs:
+        spec_path = Path(spec).expanduser()
+        if spec_path.exists():
+            resolved.append(str(spec_path.resolve()))
+            continue
+
+        alias_path = DATASET_ALIASES.get(spec)
+        if alias_path is None or pem_data_dir is None:
+            raise FileNotFoundError(
+                f"Could not resolve dataset `{spec}`. "
+                "Pass a valid CSV path or clone `pem_data` next to `pemv1`."
+            )
+
+        dataset_path = pem_data_dir / alias_path
+        if not dataset_path.exists():
+            raise FileNotFoundError(f"Resolved dataset path does not exist: {dataset_path}")
+
+        resolved.append(str(dataset_path.resolve()))
+
+    return resolved
 
 def load_pem_and_opts(args: Namespace) -> tuple[PEM, ExecutionOptions]:
     """Load a PEM from an amisc config file and set up the execution options based on the command line args"""
@@ -366,7 +429,9 @@ def main(args):
     calibration_vars = pem.get_inputs_by_category("calibration", sort="name")
 
     # Load data from files
-    data = load_ht_datasets(args.datasets)
+    dataset_files = _resolve_datasets(args.config, args.datasets)
+    print(f"Datasets:\n\t{', '.join(dataset_files)}")
+    data = load_ht_datasets(dataset_files)
     operating_conditions = [d.operating_condition for d in data]
 
     print(f"Calibration variables:\n\t{", ".join([p.name for p in calibration_vars])}")

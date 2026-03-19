@@ -37,6 +37,30 @@ uv run scripts/run_mcmc.py --datasets ../pem_data/data/SPT-100/tenenbaum/data.py
 ```
 This will run the DRAM sampler for 10 steps, placing the resulting samples in `output/mcmc`
 
+### Using `pip`
+Creating a virtual environment is similar
+```
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Next, install the dependencies
+```
+pip install -e .
+```
+
+Finally, run scripts as above, replacing `uv run` with `python3`.
+
+### Using `pdm`
+Install the dependencies as below. Note that `pdm` will automatically create a venv for you.
+```
+pdm install --no-self
+```
+
+Scripts can then be run as above, replacing `uv run` with `pdm run`.
+
+## Scripts
+
 ### Run MCMC
 The script `run_mcmc.py` will run Markov Chain Monte Carlo for a provided thruster-cathode-plume system and list of datasets.
 

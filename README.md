@@ -2,14 +2,38 @@
 
 Version 1 of the JANUS Hall Thruster Predictive Engineering Model, as described in [Marks et al. J. Appl. Phys. 138, 153305 (2025)](https://pubs.aip.org/aip/jap/article/138/15/153305/3368713/Uncertainty-quantification-of-a-multi-component)
 
-## Usage
+## Example usage (SPT-100)
+Clone this repository
+```
+git clone https://github.com/JANUS-Institute/pemv1.git
+```
 Clone the JANUS SPT-100 data repository from https://github.com/JANUS-Institute/pem_data, then make sure that the thruster definition in configs/pemv1_spt100.yml points to the correct location.
+By default, it expects the `pem_data` repo alongside the `pemv1` repo, but this can be placed anywhere as long as the config file is changed appropriately. 
+```
+git clone https://github.com/JANUS-Institute/pemv_data.git
+```
+Enter the directory
+```
+cd pemv1
+````
+
+### Using `uv`
+Create a virtual environment
+```
+uv venv
+```
+Run the script (here using only ion velocity data from Macdonald-Tenenbaum et al.).
+This will install all of the needed dependencies before running.
+```
+uv run scripts/run_mcmc.py --datasets ../pem_data/data/SPT-100/tenenbaum/data.py --output-dir=output --max-samples=10
+```
+This will run the DRAM sampler for 10 steps, placing the resulting samples in `output/mcmc`
 
 ### Run MCMC
 The script `run_mcmc.py` will run Markov Chain Monte Carlo for a provided thruster-cathode-plume system and list of datasets.
 
 Requires a valid YAML config file specifying the system.
-The outputs are written to a folder called pem_{TIMESTAMP}/mcmc if no output directory is specified.
+The outputs are written to a folder called mcmc if no output directory is specified, and a folder called `{output-dir}/pem_{timestamp}/mcmc` if `output-dir` is provided.
 That folder in turn contains folders (numbered 000000 - num_samples) that hold the model outputs for each sample generated during MCMC.
 Additionally, each sample, the value of the associated log posterior probability density function, and whether it was accepted are written to a file called mcmc.csv in the main mcmc directory.
 

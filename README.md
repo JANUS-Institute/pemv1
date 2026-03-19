@@ -10,7 +10,7 @@ git clone https://github.com/JANUS-Institute/pemv1.git
 Clone the JANUS SPT-100 data repository from https://github.com/JANUS-Institute/pem_data, then make sure that the thruster definition in configs/pemv1_spt100.yml points to the correct location.
 By default, it expects the `pem_data` repo alongside the `pemv1` repo, but this can be placed anywhere as long as the config file is changed appropriately. 
 ```
-git clone https://github.com/JANUS-Institute/pemv_data.git
+git clone https://github.com/JANUS-Institute/pem_data.git
 ```
 Enter the directory
 ```
